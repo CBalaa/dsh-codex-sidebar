@@ -1,0 +1,8 @@
+# pnpm settings live here (pnpm >= 10 ignores the package.json "pnpm" field;
+# pnpm 11 uses `allowBuilds`).
+#
+# node-pty ships prebuilds for darwin/win32 only, so on Linux its install script
+# must compile the native module (node-gyp). Without this allow-list pnpm skips
+# the build and every codex spawn fails at require('node-pty').
+allowBuilds:
+  node-pty: true

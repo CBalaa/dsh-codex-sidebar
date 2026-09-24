@@ -1,0 +1,11 @@
+# dsh-codex-sidebar bundle patch. Mounted by the official CLI:
+#   dsh plugin --profile web add file:/wafer/chh/gitprojects/dsh-codex-sidebar
+#
+# The row is dual-face: the node half owns the codex registry, the WS upgrade,
+# the loopback bridge and the DSH tools; the `dsh.client` manifest in
+# package.json routes the browser half (the sidebar tab) into the client module
+# table. `webServer` is injected for the upgrade route, `tools` for codex_*.
+- insert:
+    - id: dsh-codex-sidebar
+      name: 'dsh-codex-sidebar'
+      inject: [webServer, tools]
