@@ -104,18 +104,16 @@ ctx.effect(() => ctx.betterSidebar.registerTab({
   description: '在侧栏里跑一个持久 codex，并与本对话互通消息',
   order: 45,
   single: true,
-  createTab: (state) => ({ tab: { id: 'codex-sidebar:codex', type: 'codex-sidebar:codex', title: 'Codex' } }),
   badge: (ctx, scope, state) => unreadCount(scope.sessionId) || undefined,
   component: (props) => <CodexView {...props} />,
 }))
 ```
-- 注册必须包在 `ctx.effect(...)` 内（HMR/禁用时自动撤销，避免 "already registered"）。
-- 注册后由 better-sidebar 自动进入 DSH 原生右侧栏的 `+` guide。
-- `createTab` 的精确返回形状（`{tab, patch?}` 与 tab 记录的 `id/type/title`）在实现首步对照 `dsh-better-sidebar/docs/external-plugin-guide.md` §4 与内置 `terminal` 描述符（`src/client/builtins/tabs.tsx:296-310`）核实；本 spec 只固定语义（单实例、每会话一个 tab）。
-
 - 类型通过 `import type {} from 'dsh-better-sidebar/client/service'` 合并（纯浏览器侧路径，零 Node 类型依赖）。
 - 注册必须包在 `ctx.effect(...)` 内（HMR/禁用时自动撤销，避免 "already registered"）。
 - 注册后由 better-sidebar 自动进入 DSH 原生右侧栏的 `+` guide。
+- 已按 `docs/external-plugin-guide.md` §4 核实：`id` 同时是 tab 的 `type`；`single: true` ≡ `dedupeKey: () => id`（打开时聚焦既有 tab），**不需要** `createTab`（缺省即铸造 `{id, type, title}`）。
+- `badge` 每次 tab 栏渲染都会调用 → 必须廉价（只读本地计数、不发请求）；抛错会被吞掉。
+- `description` 只在 guide 条目 ≤ 4 条时渲染（内置已 6 条）→ 不承载关键信息。
 
 ### 4.2 Terminal WebSocket
 
@@ -189,7 +187,7 @@ You are running as a "sidebar-codex" inside DeepSeek Harness (DSH).
 
 MCP shim（codex 子进程）→ `POST <DSH_CODEX_URL>/message`（Bearer `DSH_CODEX_TOKEN`）→ 插件校验 token 与实例 → `ctx.dshBridge.deliverExternal(from='codex:<instanceId>', to=<sessionId>, text, {transport:'codex'})`。
 
-- 消息正文前缀：`[codex-sidebar <instanceId>] <text>`（结构化 source 由 dsh-bridge 记录）。
+- 消息正文不加自定义前缀：dsh-bridge 自己生成 `[dsh-bridge codex message <id> from codex:<instanceId>]` 信封（来源在 `from` 字段，模型可辨）。只有走降级路径（dsh-bridge 缺席、直接 `agent.followup`）时才加 `[codex-sidebar <instanceId>]` 前缀，保证模型仍知道来源。
 - 投递失败（会话归档/不存在）：MCP 工具返回错误文本给 codex，同时侧栏标红。
 
 ### 4.8 Loopback endpoint
