@@ -5,10 +5,14 @@
  * better-sidebar cannot break the whole client activation. The descriptor is
  * registered inside `ctx.effect` so HMR/disable revokes it (a leftover
  * registration throws "already registered" on the next activation).
+ *
+ * `badge` runs on every tab-bar render: it reads the module-level state map and
+ * never fetches (see ./state.ts for the poll that keeps it fresh).
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { supportsTabs } from '../better-sidebar.ts'
+import { supportsTabs, type SidebarSessionScope } from '../better-sidebar.ts'
 import { CodexView } from './CodexView.tsx'
+import { unreadOf } from './state.ts'
 
 export const inject = ['betterSidebar']
 
@@ -25,6 +29,7 @@ export function apply(ctx: Context): void {
       description: '在侧栏里跑一个持久 codex，并与本对话互通消息',
       order: 45,
       single: true,
+      badge: (_ctx: unknown, scope: SidebarSessionScope) => unreadOf(scope.sessionId) || undefined,
       component: (props) => <CodexView {...props} />,
     }),
   )

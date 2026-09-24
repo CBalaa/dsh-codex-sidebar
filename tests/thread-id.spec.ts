@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -48,11 +48,17 @@ describe('discoverThreadIdFromRollouts', () => {
     const nested = join(root, '2026', '09', '24')
     await mkdir(nested, { recursive: true })
     const old = '01a0d000-0000-7000-8000-000000000001'
-    await writeFile(join(nested, `rollout-2026-09-23T00-00-00-${old}.jsonl`), '{}')
+    const oldFile = join(nested, `rollout-2026-09-23T00-00-00-${old}.jsonl`)
+    await writeFile(oldFile, '{}')
     const fresh = '01a0d000-0000-7000-8000-000000000002'
-    await writeFile(join(nested, `rollout-2026-09-24T17-00-00-${fresh}.jsonl`), '{}')
-
-    const spawnedAt = Date.now() - 1000
+    const freshFile = join(nested, `rollout-2026-09-24T17-00-00-${fresh}.jsonl`)
+    await writeFile(freshFile, '{}')
+    // Explicit mtimes: both writes can land in the same millisecond otherwise.
+    // The spawn happened a minute ago, so only the fresh rollout is "after" it.
+    const now = Date.now()
+    const spawnedAt = now - 60_000
+    await utimes(oldFile, new Date(now - 120_000), new Date(now - 120_000))
+    await utimes(freshFile, new Date(now - 5_000), new Date(now - 5_000))
     expect(await discoverThreadIdFromRollouts({ sessionsDir: root, spawnedAt })).toBe(fresh)
     // A spawn after every file means "no rollout yet".
     expect(await discoverThreadIdFromRollouts({ sessionsDir: root, spawnedAt: Date.now() + 60_000 })).toBeUndefined()

@@ -1,30 +1,59 @@
 /**
- * The codex terminal view.
+ * The codex terminal view: toolbar (status + restart/stop/clear) over an xterm.
  *
- * Mirrors better-sidebar's TerminalView transport contract: raw input frames
+ * Transport contract mirrors better-sidebar's TerminalView: raw input frames
  * out, raw output frames in, JSON control frames for resize/park/close. No
- * custom key handler is installed, so keystrokes (including Ctrl+C and the
- * arrow keys) reach xterm's own textarea and go straight to codex — the
- * "focused window wins" requirement.
+ * custom key handler is installed, so keystrokes (including Ctrl+C and the arrow
+ * keys) reach xterm's own textarea and go straight to codex — the "focused
+ * window wins" requirement.
  *
- * Unmount while the tab is still open means the user switched conversations:
- * we PARK (the codex keeps running). Closing the tab detaches the same way; only
- * the toolbar's explicit stop kills the process.
+ * Unmount while the tab is still open means the user switched conversations: we
+ * PARK (the codex keeps running). Closing the tab detaches the same way; only the
+ * toolbar's explicit stop kills the process.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import type { SidebarTabComponentProps } from '../better-sidebar.ts'
+import { kill, markSeen, restart, stateOf, subscribe, watch, type CodexTabState } from './state.ts'
 
 /** Consecutive unexplained closes before we stop reconnecting on our own. */
 const FAILURE_LIMIT = 3
 /** Reconnect delay after a dropped socket (page refresh / host hiccup). */
 const RECONNECT_MS = 2000
 
+const STATE_LABEL: Record<CodexTabState['state'], string> = {
+  none: '未启动',
+  running: '运行中',
+  exited: '已退出',
+  error: '出错',
+}
+
+const STATE_COLOR: Record<CodexTabState['state'], string> = {
+  none: '#8a8a8a',
+  running: '#4ec9b0',
+  exited: '#d7ba7d',
+  error: '#f48771',
+}
+
 export function CodexView({ scope, visible, tab }: SidebarTabComponentProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const termRef = useRef<Terminal | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const state = useSyncExternalStore(
+    (listener) => subscribe(listener),
+    () => stateOf(scope.sessionId),
+  )
+
+  useEffect(() => watch(scope.sessionId), [scope.sessionId])
+
+  useEffect(() => {
+    if (!visible) return
+    void markSeen(scope.sessionId)
+  }, [visible, scope.sessionId, state.unread])
 
   useEffect(() => {
     const host = hostRef.current
@@ -35,6 +64,7 @@ export function CodexView({ scope, visible, tab }: SidebarTabComponentProps) {
       scrollback: 5000,
       allowProposedApi: true,
     })
+    termRef.current = term
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(host)
@@ -93,7 +123,6 @@ export function CodexView({ scope, visible, tab }: SidebarTabComponentProps) {
     window.addEventListener('resize', refit)
     const observer = new ResizeObserver(refit)
     observer.observe(host)
-    // The tab may mount before its panel has its final size.
     const settle = setTimeout(refit, 50)
 
     return () => {
@@ -106,20 +135,51 @@ export function CodexView({ scope, visible, tab }: SidebarTabComponentProps) {
       if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'park' }))
       socket?.close()
       term.dispose()
+      termRef.current = null
     }
   }, [scope.sessionId])
 
-  useEffect(() => {
-    if (!visible) return
-    void fetch('/codex-sidebar/api/seen', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sessionId: scope.sessionId }),
-    }).catch(() => undefined)
-  }, [visible, scope.sessionId])
+  const act = (action: () => Promise<void>): void => {
+    setBusy(true)
+    void action()
+      .catch((cause: unknown) => { setError((cause as Error).message) })
+      .finally(() => { setBusy(false) })
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '4px 8px',
+          fontSize: 11,
+          fontFamily: 'ui-monospace, monospace',
+          borderBottom: '1px solid rgba(128,128,128,0.25)',
+        }}
+      >
+        <span style={{ color: STATE_COLOR[state.state] }}>●</span>
+        <span>{STATE_LABEL[state.state]}</span>
+        {state.threadId !== null && <span style={{ opacity: 0.6 }}>{state.threadId.slice(0, 8)}</span>}
+        {state.unread > 0 && <span style={{ color: '#d7ba7d' }}>{state.unread} 条未读</span>}
+        <span style={{ flex: 1 }} />
+        {state.state !== 'running' && state.bound && (
+          <button disabled={busy} onClick={() => { act(async () => { await restart(scope) }) }}>重启</button>
+        )}
+        {state.bound && (
+          <button
+            disabled={busy}
+            onClick={() => {
+              if (!window.confirm('结束这个 codex 进程？（对话历史保留在 codex 侧，重开将启动新进程）')) return
+              act(async () => { await kill(scope) })
+            }}
+          >
+            结束 codex
+          </button>
+        )}
+        <button onClick={() => { termRef.current?.clear() }}>清屏</button>
+      </div>
       {error !== null && (
         <div style={{ padding: '4px 8px', fontSize: 12, color: '#f48771', fontFamily: 'monospace' }}>
           codex 连接异常：{error}
