@@ -1,4 +1,8 @@
 node_modules/
-lib/
 *.tgz
 .DS_Store
+
+# lib/ IS committed on purpose: this repo is consumed as a git submodule by
+# dsh-plugins, where the profile installs the plugin directly (no build step).
+# Keep it in sync with src/ by running `pnpm run build` before committing.
+lib/types/**/*.tsbuildinfo
