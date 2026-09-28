@@ -5,6 +5,9 @@ English | [简体中文](README.zh.md)
 > A persistent `codex` CLI session inside the DSH right sidebar, bound 1:1 to a
 > conversation, with plugin-mediated messaging between codex and DSH.
 
+Repository: <https://github.com/CBalaa/dsh-codex-sidebar>
+Status: **v0.1.0 — verified on DSH 0.1.5-rc.1** (acceptance A1–A7 recorded in `docs/aegis/`).
+
 ## What it does
 
 - Adds a **Codex** entry to DSH's native right sidebar (`dsh-better-sidebar`'s

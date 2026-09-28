@@ -4,6 +4,8 @@
 
 > 把 codex-cli 塞进 DSH 右侧边栏：一个**持久**的 codex TUI，与当前对话 1:1 绑定，
 > 并通过插件与 DSH 双向通信。
+>
+> 仓库：<https://github.com/CBalaa/dsh-codex-sidebar>
 
 ## 它做什么
 

@@ -4,6 +4,23 @@
   "description": "DSH web plugin: a persistent codex-cli TUI in the right sidebar, bound 1:1 to a conversation, with plugin-mediated codex <-> DSH messaging.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CBalaa/dsh-codex-sidebar.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CBalaa/dsh-codex-sidebar/issues"
+  },
+  "homepage": "https://github.com/CBalaa/dsh-codex-sidebar#readme",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "codex",
+    "codex-cli",
+    "sidebar",
+    "terminal"
+  ],
   "main": "./lib/index.js",
   "types": "./lib/types/index.d.ts",
   "exports": {
