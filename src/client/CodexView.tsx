@@ -18,6 +18,7 @@ import '@xterm/xterm/css/xterm.css'
 import type { SidebarTabComponentProps } from '../better-sidebar.ts'
 import { kill, markSeen, restart, stateOf, subscribe, watch, type CodexTabState } from './state.ts'
 import { OutputGate } from './terminal-gate.ts'
+import { subscribeColorScheme, xtermTheme } from './theme.ts'
 
 /** Consecutive unexplained closes before we stop reconnecting on our own. */
 const FAILURE_LIMIT = 3
@@ -64,6 +65,13 @@ export function CodexView({ scope, visible, tab }: SidebarTabComponentProps) {
       fontSize: 12,
       scrollback: 5000,
       allowProposedApi: true,
+      cursorBlink: true,
+      // DSH design tokens, exactly like the built-in terminal: without this the
+      // bare xterm defaults rendered dark-on-dark inside DSH.
+      theme: xtermTheme(),
+    })
+    const unsubscribeTheme = subscribeColorScheme(() => {
+      term.options.theme = xtermTheme()
     })
     termRef.current = term
     const fit = new FitAddon()
@@ -143,6 +151,7 @@ export function CodexView({ scope, visible, tab }: SidebarTabComponentProps) {
 
     return () => {
       disposed = true
+      unsubscribeTheme()
       clearTimeout(settle)
       clearTimeout(settleLater)
       window.removeEventListener('resize', refit)
