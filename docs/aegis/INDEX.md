@@ -9,6 +9,6 @@ Entries are workspace records, not authoritative runtime decisions.
 | 2026-09-24 | baseline | docs/aegis/baseline/2026-09-24-initial-baseline.md | Initial dual baseline |
 | 2026-09-24 | plan | docs/aegis/plans/2026-09-24-codex-sidebar-implementation.md | dsh-codex-sidebar implementation plan |
 | 2026-09-28 | baseline | docs/aegis/baseline/2026-09-28-verification.md | A1-A7 acceptance record |
-| 2026-09-28 | adr | docs/aegis/adr/0001-codex-to-dsh-delivery-owner.md | codex -> DSH delivery owner |
-| 2026-09-28 | adr | docs/aegis/adr/0002-better-sidebar-service-contract.md | better-sidebar service contract |
-| 2026-09-28 | adr | docs/aegis/adr/0003-model-facing-contracts.md | model-facing contracts |
+| 2026-09-28 | adr | docs/aegis/adr/ADR-0001-codex-to-dsh-delivery-owner.md | ADR-0001 - codex -> DSH delivery goes through dsh-bridge |
+| 2026-09-28 | adr | docs/aegis/adr/ADR-0002-better-sidebar-service-contract.md | ADR-0002 - The sidebar tab consumes better-sidebar as a structural service |
+| 2026-09-28 | adr | docs/aegis/adr/ADR-0003-model-facing-contracts.md | ADR-0003 - Injected identity, delivery gate and tool names are model-facing contracts |
