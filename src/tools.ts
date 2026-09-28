@@ -13,6 +13,7 @@ import type { CodexInstance, CodexRegistry } from './registry.ts'
 import type { HostAgent, HostToolDefinition } from './host-types.ts'
 import { deliverToCodex, runCodex } from './deliver.ts'
 import { plainText } from './readiness.ts'
+import { defaultSessionsDir, discoverThreadIdFromRollouts } from './thread-id.ts'
 import type { SpawnInput } from './spawn.ts'
 
 export interface ToolDeps {
@@ -22,7 +23,26 @@ export interface ToolDeps {
   prepare(sessionId: string): Promise<{ spawn: SpawnInput }>
   /** Delivery implementation; tests inject a stub. */
   deliver?: typeof deliverToCodex
+  /** Rollout discovery (the `codex queue` path needs codex's own thread id). */
+  discoverThreadId?: (instance: CodexInstance) => Promise<string | undefined>
   now?(): number
+}
+
+/**
+ * Thread id for the clean `codex queue` path: the TUI status line only shows it
+ * when the sidebar is wide enough, so fall back to the rollout codex wrote for
+ * this session (cwd-matched and uniqueness-checked — see thread-id.ts).
+ */
+async function resolveThreadId(deps: ToolDeps, instance: CodexInstance): Promise<void> {
+  if (instance.threadId !== undefined) return
+  const discover = deps.discoverThreadId ?? (async (target: CodexInstance) =>
+    await discoverThreadIdFromRollouts({
+      sessionsDir: await defaultSessionsDir(),
+      spawnedAt: target.spawnAt,
+      cwd: target.cwd,
+    }))
+  const found = await discover(instance).catch(() => undefined)
+  if (found !== undefined) instance.threadId = found
 }
 
 const text = (value: string): { type: string; text: string }[] => [{ type: 'text', text: value }]
@@ -77,6 +97,7 @@ export function createCodexTools(deps: ToolDeps): HostToolDefinition[] {
       const { text: message } = args as unknown as { text?: string }
       if (typeof message !== 'string' || message.trim() === '') throw new Error('text must not be empty')
       const instance = instanceOf(deps, exec)
+      await resolveThreadId(deps, instance)
       const deliver = deps.deliver ?? deliverToCodex
       const result = await deliver({ run: runCodex, now }, instance, message, deps.codexPath)
       deps.registry.recordToCodex(instance, message)
