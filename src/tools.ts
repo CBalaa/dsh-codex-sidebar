@@ -12,6 +12,7 @@
 import type { CodexInstance, CodexRegistry } from './registry.ts'
 import type { HostAgent, HostToolDefinition } from './host-types.ts'
 import { deliverToCodex, runCodex } from './deliver.ts'
+import { plainText } from './readiness.ts'
 import type { SpawnInput } from './spawn.ts'
 
 export interface ToolDeps {
@@ -41,11 +42,10 @@ function instanceOf(deps: ToolDeps, exec: { agent?: HostAgent }): CodexInstance 
 }
 
 function tailOf(instance: CodexInstance, maxChars = 1200): string {
-  // Strip the ANSI control stream so the model sees text, not escape codes.
-  // eslint-disable-next-line no-control-regex -- terminal control bytes are the point
-  const plain = instance.tail.replace(/\u001b\[[0-9;?]*[A-Za-z]|\u001b\][^\u0007]*\u0007/g, '')
-  const trimmed = plain.trim()
-  return trimmed.length <= maxChars ? trimmed : trimmed.slice(trimmed.length - maxChars)
+  // The model must see text, not the escape stream codex paints with (see
+  // plainText: every cursor move becomes a space).
+  const visible = plainText(instance.tail)
+  return visible.length <= maxChars ? visible : visible.slice(visible.length - maxChars)
 }
 
 export function createCodexTools(deps: ToolDeps): HostToolDefinition[] {

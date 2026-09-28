@@ -60,13 +60,20 @@ describe('deliverToCodex', () => {
 
   it('falls back to a gated bracketed paste when the queue path fails', async () => {
     const writes: Writes = { chunks: [] }
+    const target = instance({ threadId: THREAD }, writes)
+    // The TUI echoes the paste back, which is what unlocks the Enter.
+    const original = target.pty.write.bind(target.pty)
+    target.pty.write = (data: string) => {
+      original(data)
+      if (data.includes('hello codex')) target.tail = `› hello codex\u001b[?25h`
+    }
     const result = await deliverToCodex(
       {
         ...immediate,
         now: () => 10_000,
         run: async (): Promise<RunResult> => ({ code: 1, stdout: '', stderr: 'no rollout found' }),
       },
-      instance({ threadId: THREAD }, writes),
+      target,
       'hello codex',
       '/usr/bin/codex',
     )
@@ -134,6 +141,28 @@ describe('deliverToCodex', () => {
       ),
     ).rejects.toThrow(/composer is not visible yet/)
     expect(writes.chunks).toEqual([])
+  })
+
+  it('never presses Enter when the paste was swallowed by a modal', async () => {
+    const writes: Writes = { chunks: [] }
+    const clock = { t: 10_000 }
+    const target = instance({ threadId: THREAD, tail: '› ' }, writes)
+    await expect(
+      deliverToCodex(
+        {
+          now: () => clock.t,
+          sleep: async (ms) => { clock.t += ms },
+          waitMs: 5000,
+          confirmMs: 1000,
+          run: async (): Promise<RunResult> => ({ code: 1, stdout: '', stderr: 'no rollout found' }),
+        },
+        target,
+        'hello',
+        '/usr/bin/codex',
+      ),
+    ).rejects.toThrow(/did not echo the pasted text/)
+    // The paste went out, but no Enter did.
+    expect(writes.chunks).toEqual(['\u001b[200~hello\u001b[201~'])
   })
 
   it('refuses to deliver into a dead process', async () => {

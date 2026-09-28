@@ -44,12 +44,50 @@ export function isReadyForInjection(input: ReadinessInput): Readiness {
   if (input.now - input.lastOutputAt < quietMs) {
     return { ready: false, reason: 'codex is still producing output' }
   }
-  const blocked = BLOCK_MARKERS.find((marker) => input.tail.includes(marker))
+  const visible = plainText(input.tail)
+  const blocked = BLOCK_MARKERS.find((marker) => visible.includes(marker))
   if (blocked !== undefined) {
     return { ready: false, reason: `codex is waiting for you (${blocked})` }
   }
-  if (!input.tail.includes(COMPOSER_MARKER)) {
+  if (!visible.includes(COMPOSER_MARKER)) {
     return { ready: false, reason: 'codex composer is not visible yet' }
   }
   return { ready: true }
+}
+
+/**
+ * Flatten a raw pty stream into matchable text.
+ *
+ * codex does not print its screens as plain lines: it draws each WORD with a
+ * cursor-positioning escape (`Trust\u001b[5;9Hthis\u001b[5;14Hfolder?`), so a raw
+ * `includes('Trust this folder?')` never matches and a naive ANSI strip yields
+ * `Trustthisfolder?`. Replacing every escape with a space and collapsing runs
+ * reconstructs the visible text closely enough for marker matching.
+ */
+export function plainText(value: string): string {
+  const spaced = value.replace(
+    // OSC (title) sequences, CSI sequences, and simple two-byte escapes.
+    // eslint-disable-next-line no-control-regex -- terminal control bytes are the point
+    /\u001b\][^\u0007]*(?:\u0007|\u001b\\)|\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b[@-Z\\-_]/g,
+    ' ',
+  )
+  return spaced.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Did the pasted text actually land in the composer?
+ *
+ * This is the second half of the safety story, and it exists because codex
+ * paints its composer FIRST and only later (seconds later, observed live) clears
+ * the screen for a modal such as `Trust this folder?`. A readiness check alone
+ * therefore cannot prevent the race — the paste is what proves it: a modal
+ * swallows the paste, the composer echoes it. We only press Enter on an echo.
+ *
+ * `probeChars` keeps the check robust against wrapping and redraws.
+ */
+export function pasteLanded(tail: string, text: string, probeChars = 32): boolean {
+  const firstLine = text.split('\n')[0] ?? ''
+  const probe = firstLine.slice(0, Math.max(8, probeChars)).replace(/\s+/g, ' ').trim()
+  if (probe === '') return false
+  return plainText(tail).includes(probe)
 }

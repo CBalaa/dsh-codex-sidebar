@@ -11,7 +11,7 @@
  */
 import { spawn } from 'node:child_process'
 import type { CodexInstance } from './registry.ts'
-import { isReadyForInjection } from './readiness.ts'
+import { BLOCK_MARKERS, isReadyForInjection, pasteLanded } from './readiness.ts'
 
 export interface RunResult {
   code: number
@@ -25,6 +25,8 @@ export interface DeliverToCodexDeps {
   /** How long to wait for the composer before giving up (default 20s). */
   waitMs?: number
   quietMs?: number
+  /** How long to wait for the composer to echo the paste (default 2s). */
+  confirmMs?: number
   sleep?(ms: number): Promise<void>
 }
 
@@ -81,6 +83,25 @@ export async function deliverToCodex(
   }
 
   instance.pty.write(`\u001b[200~${text}\u001b[201~`)
+
+  // Enter is ONLY sent once the composer echoed the paste back: codex paints its
+  // composer before a late modal (folder trust, approval) clears the screen, and
+  // a modal swallows the paste. Submitting blindly could answer that modal.
+  const confirmDeadline = deps.now() + (deps.confirmMs ?? 2_000)
+  for (;;) {
+    if (pasteLanded(instance.tail, text)) break
+    if (deps.now() >= confirmDeadline) {
+      const blocked = BLOCK_MARKERS.find((marker) => instance.tail.includes(marker))
+      failures.push(
+        blocked === undefined
+          ? 'codex did not echo the pasted text (a modal or full-screen view may be open)'
+          : `codex is waiting for you (${blocked}); nothing was submitted`,
+      )
+      throw new Error(`could not deliver to codex: ${failures.join('; ')}`)
+    }
+    await sleep(150)
+  }
+
   await sleep(150)
   instance.pty.write('\r')
   return { via: 'pty', detail: failures.join('; ') }
