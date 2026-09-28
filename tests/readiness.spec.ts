@@ -52,6 +52,12 @@ describe('pasteLanded', () => {
     expect(pasteLanded('› xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', long)).toBe(true)
   })
 
+  it('accepts a CJK echo, which codex positions one wide char per cursor move', () => {
+    // Captured live: codex echoed `这是一条中文消息` as `这 是 一 条 中 文 消 息`.
+    const echo = '› ASCII_MARKER_XYZ 这 是 一 条 比 较 长 的 中 文 测 试 消 息 ， 用 来 观 察'
+    expect(pasteLanded(echo, 'ASCII_MARKER_XYZ 这是一条比较长的中文测试消息，用来观察折行时的回显')).toBe(true)
+  })
+
   it('rejects a paste a modal swallowed (nothing echoed)', () => {
     expect(pasteLanded('› 1. Trust and continue', 'hello from DSH')).toBe(false)
   })

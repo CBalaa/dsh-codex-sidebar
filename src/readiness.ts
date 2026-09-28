@@ -75,6 +75,18 @@ export function plainText(value: string): string {
 }
 
 /**
+ * Whitespace-insensitive comparison key.
+ *
+ * codex positions every WIDE character (CJK) with its own cursor move, so
+ * `plainText` yields `这 是 一 条 …` for a Chinese message, and a wrapped line
+ * inserts a gap too. Squeezing all whitespace out of both sides makes the
+ * comparison independent of both effects.
+ */
+function squeeze(value: string): string {
+  return value.replace(/\s+/g, '')
+}
+
+/**
  * Did the pasted text actually land in the composer?
  *
  * This is the second half of the safety story, and it exists because codex
@@ -87,7 +99,7 @@ export function plainText(value: string): string {
  */
 export function pasteLanded(tail: string, text: string, probeChars = 32): boolean {
   const firstLine = text.split('\n')[0] ?? ''
-  const probe = firstLine.slice(0, Math.max(8, probeChars)).replace(/\s+/g, ' ').trim()
+  const probe = squeeze(firstLine.slice(0, Math.max(8, probeChars)))
   if (probe === '') return false
-  return plainText(tail).includes(probe)
+  return squeeze(plainText(tail)).includes(probe)
 }
