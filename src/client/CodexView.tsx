@@ -17,6 +17,7 @@ import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import type { SidebarTabComponentProps } from '../better-sidebar.ts'
 import { kill, markSeen, restart, stateOf, subscribe, watch, type CodexTabState } from './state.ts'
+import { OutputGate } from './terminal-gate.ts'
 
 /** Consecutive unexplained closes before we stop reconnecting on our own. */
 const FAILURE_LIMIT = 3
@@ -83,6 +84,15 @@ export function CodexView({ scope, visible, tab }: SidebarTabComponentProps) {
     let disposed = false
     let failures = 0
 
+    // Nothing reaches the terminal (and the server never learns our geometry)
+    // until the panel has a real size — see terminal-gate.ts for the repro.
+    const gate = new OutputGate((data) => { term.write(data) })
+    const announceSize = (repaint: boolean): void => {
+      if (socket?.readyState !== WebSocket.OPEN) return
+      socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+      if (repaint) socket.send(JSON.stringify({ type: 'repaint' }))
+    }
+
     const connect = (): void => {
       if (disposed) return
       const ws = new WebSocket(url)
@@ -90,10 +100,11 @@ export function CodexView({ scope, visible, tab }: SidebarTabComponentProps) {
       ws.onopen = () => {
         failures = 0
         setError(null)
-        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+        // The first usable geometry was already reached: tell the server now.
+        if (gate.ready) announceSize(true)
       }
       ws.onmessage = (event: MessageEvent) => {
-        term.write(String(event.data))
+        gate.push(String(event.data))
       }
       ws.onclose = (event: CloseEvent) => {
         if (disposed) return
@@ -119,15 +130,21 @@ export function CodexView({ scope, visible, tab }: SidebarTabComponentProps) {
       } catch {
         // Hidden or detached panel.
       }
+      // Transitioning to a usable size: flush what the server already sent and
+      // ask codex to repaint at the true geometry.
+      if (gate.size(term.cols, term.rows)) announceSize(true)
     }
     window.addEventListener('resize', refit)
     const observer = new ResizeObserver(refit)
     observer.observe(host)
     const settle = setTimeout(refit, 50)
+    const settleLater = setTimeout(refit, 400)
+    refit()
 
     return () => {
       disposed = true
       clearTimeout(settle)
+      clearTimeout(settleLater)
       window.removeEventListener('resize', refit)
       observer.disconnect()
       inputSub.dispose()

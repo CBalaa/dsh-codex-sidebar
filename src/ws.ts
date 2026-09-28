@@ -85,6 +85,23 @@ export function createCodexWs(deps: WsDeps): WsHandle {
           }
           return
         }
+        if (frame.type === 'repaint') {
+          // Force a full TUI repaint: a one-column resize makes codex redraw.
+          try {
+            const { cols, rows } = instance.pty
+            instance.pty.resize(Math.max(2, cols - 1), rows)
+            setTimeout(() => {
+              try {
+                instance.pty.resize(cols, rows)
+              } catch {
+                // The process exited in between.
+              }
+            }, 60)
+          } catch {
+            // The process exited in between.
+          }
+          return
+        }
         if (frame.type === 'park' || frame.type === 'close') {
           // Detach: the view is gone, the codex keeps running (spec §2.2).
           deps.registry.park(instance.id)
